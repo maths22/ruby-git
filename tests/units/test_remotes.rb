@@ -10,12 +10,12 @@ class TestRemotes < Test::Unit::TestCase
 
       local.add_remote('testremote', remote)
 
-      assert(!local.branches.map{|b| b.full}.include?('testremote/master'))
+      assert(!local.branches.map{|b| b.full}.include?('refs/remotes/testremote/master'))
       assert(local.remotes.map{|b| b.name}.include?('testremote'))
 
       local.add_remote('testremote2', remote, :fetch => true)
 
-      assert(local.branches.map{|b| b.full}.include?('remotes/testremote2/master'))
+      assert(local.branches.map{|b| b.full}.include?('refs/remotes/testremote2/master'))
       assert(local.remotes.map{|b| b.name}.include?('testremote2'))
 
       local.add_remote('testremote3', remote, :track => 'master')
@@ -252,7 +252,7 @@ class TestRemotes < Test::Unit::TestCase
 
       branch = r2.remote('origin').branch
 
-      assert_equal('origin/first', branch.full)
+      assert_equal('refs/remotes/origin/first', branch.full)
     end
   end
 

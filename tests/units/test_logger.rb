@@ -28,16 +28,17 @@ class TestLogger < Test::Unit::TestCase
 
     logc = File.read(log.path)
 
-    expected_log_entry = /INFO -- : git (?<global_options>.*?) ['"]branch['"] ['"]-a['"]/
+    expected_log_entry = /INFO -- : git .*branch.*--all/
     assert_match(expected_log_entry, logc, missing_log_entry)
 
-    expected_log_entry = /DEBUG -- :   cherry/
+    expected_log_entry = %r{DEBUG -- : refs/heads/cherry}
     assert_match(expected_log_entry, logc, missing_log_entry)
   end
 
   def test_logging_at_info_level_should_not_show_debug_messages
     log = Tempfile.new('logfile')
     log.close
+
     logger = Logger.new(log.path)
     logger.level = Logger::INFO
 
@@ -46,10 +47,10 @@ class TestLogger < Test::Unit::TestCase
 
     logc = File.read(log.path)
 
-    expected_log_entry = /INFO -- : git (?<global_options>.*?) ['"]branch['"] ['"]-a['"]/
+    expected_log_entry = /INFO -- : git .*branch.*--all/
     assert_match(expected_log_entry, logc, missing_log_entry)
 
-    expected_log_entry = /DEBUG -- :   cherry/
+    expected_log_entry = %r{DEBUG -- : refs/heads/cherry}
     assert_not_match(expected_log_entry, logc, unexpected_log_entry)
   end
 end

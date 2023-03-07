@@ -365,41 +365,70 @@ module Git
       command('symbolic-ref', 'HEAD', "refs/heads/#{branch_name}")
     end
 
-    BRANCH_LINE_REGEXP = /
-      ^
-        # Prefix indicates if this branch is checked out. The prefix is one of:
-        (?:
-          (?<current>\*[[:blank:]]) |  # Current branch (checked out in the current worktree)
-          (?<worktree>\+[[:blank:]]) | # Branch checked out in a different worktree
-          [[:blank:]]{2}               # Branch not checked out
-        )
+    BranchStruct = Struct.new(:refname, :name, :remote_name, :current, :worktree_path, :sha) do
+      def remote?
+        !remote_name.nil?
+      end
 
-        # The branch's full refname
-        (?:
-          (?<not_a_branch>\(not[[:blank:]]a[[:blank:]]branch\)) |
-          (?:\(HEAD[[:blank:]]detached[[:blank:]]at[[:blank:]](?<detached_ref>[^\)]+)\)) |
-          (?<refname>[^[[:blank:]]]+)
-        )
+      def local?
+        remote_name.nil?
+      end
 
-        # Optional symref
-        # If this ref is a symbolic reference, this is the ref referenced
-        (?:
-          [[:blank:]]->[[:blank:]](?<symref>.*)
-        )?
-      $
-    /x
+      alias current? current
+
+      def checked_out?
+        !worktree_path.nil?
+      end
+    end
+
+    BRANCH_FORMAT_OPTION = '--format=%(refname)%01%(HEAD)%01%(worktreepath)%01%(objectname)'
+
+    def branch_local(name)
+      line = command('branch', '--list', BRANCH_FORMAT_OPTION, name).chomp
+      line.empty? ? nil : branch_from_line(line)
+    end
+
+    def branch_local_exist?(name)
+      !branch_local(name).nil?
+    end
+
+    def branch_remote(remote, name)
+      remote_branch_name = "#{remote}/#{name}"
+      line = command('branch', '--list', '--remote', BRANCH_FORMAT_OPTION, remote_branch_name).chomp
+      line.empty? ? nil : branch_from_line(line)
+    end
+
+    def branch_remote_exist?(remote, name)
+      !branch_remote(remote, name).nil?
+    end
+
+    def branch_from_line(line)
+      fields = line.split("\u0001")
+      return nil if fields[0].start_with?('(HEAD detached at ')
+      remote_name = name = nil
+      if fields[0].start_with?('refs/heads/')
+        name = fields[0].delete_prefix('refs/heads/')
+      elsif fields[0].start_with?('refs/remotes/')
+        remote_name, name = fields[0].delete_prefix('refs/remotes/').split('/', 2)
+      else
+        raise Git::GitExecuteError, "Unexpected branch line: #{line.inspect}"
+      end
+
+      BranchStruct.new(
+        refname: fields[0],
+        name: name,
+        remote_name: remote_name,
+        current: fields[1] == '*',
+        worktree_path: (fields[2].empty? ? nil : fields[2]),
+        sha: (fields[3].empty? ? nil : fields[3])
+      )
+    end
 
     def branches_all
-      command_lines('branch', '-a').map do |line|
-        match_data = line.match(BRANCH_LINE_REGEXP)
-        raise GitExecuteError, 'Unexpected branch line format' unless match_data
-        next nil if match_data[:not_a_branch] || match_data[:detached_ref]
-        [
-          match_data[:refname],
-          !match_data[:current].nil?,
-          !match_data[:worktree].nil?,
-          match_data[:symref]
-        ]
+      output = command('branch', '--all', BRANCH_FORMAT_OPTION)
+
+      result = output.lines.map do |line|
+        branch_from_line(line)
       end.compact
     end
 
@@ -444,7 +473,14 @@ module Git
     end
 
     def branch_current
-      branches_all.select { |b| b[1] }.first[0] rescue nil
+      branches_all.find(&:current?)&.name || symbolic_ref('HEAD', short: true)
+    end
+
+    def symbolic_ref(ref, short: false)
+      arr_opts = []
+      arr_opts << ref
+      arr_opts << '--short' if short
+      command('symbolic-ref', *arr_opts).chomp
     end
 
     def branch_contains(commit, branch_name="")

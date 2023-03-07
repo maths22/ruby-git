@@ -232,10 +232,71 @@ class TestLib < Test::Unit::TestCase
   def test_branches_all
     branches = @lib.branches_all
     assert(branches.size > 0)
-    assert(branches.select { |b| b[1] }.size > 0)  # has a current branch
-    assert(branches.select { |b| /\//.match(b[0]) }.size > 0)   # has a remote branch
-    assert(branches.select { |b| !/\//.match(b[0]) }.size > 0)  # has a local branch
-    assert(branches.select { |b| /master/.match(b[0]) }.size > 0)  # has a master branch
+
+    # it should have one current branch
+    assert_equal(1, branches.select(&:current?).size)
+
+    # it should have one remote branch
+    assert_equal(1, branches.select(&:remote?).size)
+
+    # it should have 7 local branches
+    assert_equal(7, branches.select(&:local?).size)
+
+    # it should have two branches named master:
+    # one a local branch and the other a remote tracking branch
+    master_branches = branches.select { |b| b.name == 'master' }
+    assert_equal(2, master_branches.size)
+    assert_equal(1, master_branches.select(&:local?).size)
+    assert_equal(1, master_branches.select(&:remote?).size)
+  end
+
+  def test_branch_local
+    branch = @lib.branch_local('master')
+
+    assert_equal('master', branch.name)
+    assert_equal(nil, branch.remote_name)
+    assert_equal('5e392652a881999392c2757cf9b783c5d47b67f7', branch.sha)
+    assert_equal(false, branch.remote?)
+    assert_equal(true, branch.local?)
+    assert_equal(false, branch.current?)
+    assert_equal(false, branch.checked_out?)
+
+    branch = @lib.branch_local('git_grep')
+    assert_equal('git_grep', branch.name)
+    assert_equal(nil, branch.remote_name)
+    assert_equal('46abbf07e3c564c723c7c039a43ab3a39e5d02dd', branch.sha)
+    assert_equal(false, branch.remote?)
+    assert_equal(true, branch.local?)
+    assert_equal(true, branch.current?)
+    assert_equal(true, branch.checked_out?)
+  end
+
+  def test_branch_local_exist
+    assert_equal(true, @lib.branch_local_exist?('master'))
+    assert_equal(false, @lib.branch_local_exist?('bogus'))
+  end
+
+  def test_branch_remote
+    branch = @lib.branch_remote('working', 'master')
+
+    assert_equal('master', branch.name)
+    assert_equal('working', branch.remote_name)
+    assert_equal('545ffc79786f268524c35e1e05b1770c7c74faf1', branch.sha)
+    assert_equal(true, branch.remote?)
+    assert_equal(false, branch.local?)
+    assert_equal(false, branch.current?)
+    assert_equal(false, branch.checked_out?)
+
+    branch = @lib.branch_remote('working', 'bogus')
+    assert_equal(nil, branch)
+
+    branch = @lib.branch_remote('origin', 'master')
+    assert_equal(nil, branch)
+  end
+
+  def test_branch_remote_exist
+    assert_equal(true, @lib.branch_remote_exist?('working', 'master'))
+    assert_equal(false, @lib.branch_remote_exist?('working', 'bogus'))
   end
 
   def test_config_remote
@@ -243,7 +304,6 @@ class TestLib < Test::Unit::TestCase
     assert_equal('../working.git', config['url'])
     assert_equal('+refs/heads/*:refs/remotes/working/*', config['fetch'])
   end
-
 
   def test_ls_tree
     tree = @lib.ls_tree('94c827875e2cadb8bc8d4cdd900f19aa9e8634c7')

@@ -5,7 +5,7 @@ module Git
     module Factory
       # @return [Git::Branch] an object for branch_name
       def branch(branch_name = self.current_branch)
-        Git::Branch.new(self, branch_name)
+        Git::Branch.new(self, nil, branch_name)
       end
 
       # @return [Git::Branches] a collection of all the branches in the repository.

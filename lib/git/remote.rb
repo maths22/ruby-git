@@ -17,13 +17,11 @@ module Git
 
     # merge this remote locally
     def merge(branch = @base.current_branch)
-      remote_tracking_branch = "#{@name}/#{branch}"
-      @base.merge(remote_tracking_branch)
+      @base.merge("refs/remotes/#{@name}/#{branch}")
     end
 
     def branch(branch = @base.current_branch)
-      remote_tracking_branch = "#{@name}/#{branch}"
-      Git::Branch.new(@base, remote_tracking_branch)
+      Git::Branch.new(@base, @name, "refs/remotes/#{@name}/#{branch}")
     end
 
     def remove

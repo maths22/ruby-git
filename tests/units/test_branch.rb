@@ -14,6 +14,13 @@ class TestBranch < Test::Unit::TestCase
     @branches = @git.branches
   end
 
+  test '#branch_current when there are no commits' do
+    in_temp_dir do
+      git = Git.init('.', initial_branch: 'fizz')
+      assert_equal('fizz', git.current_branch)
+    end
+  end
+
   test 'Git::Lib#branch with no args should return current branch' do
     in_temp_dir do
       git = Git.init('.', initial_branch: 'my_branch')
@@ -45,8 +52,8 @@ class TestBranch < Test::Unit::TestCase
       assert(remote_branches.first.current)
       local_branch_refs = local_branches.map(&:full)
       assert_include(local_branch_refs, 'master')
-      assert_include(local_branch_refs, 'remotes/origin/master')
-      assert_include(local_branch_refs, 'remotes/origin/HEAD')
+      assert_include(local_branch_refs, 'refs/remotes/origin/master')
+      assert_include(local_branch_refs, 'refs/remotes/origin/HEAD')
     end
   end
 
@@ -70,6 +77,37 @@ class TestBranch < Test::Unit::TestCase
     end
   end
 
+  test 'Git::Lib#branches_all with worktrees' do
+    in_temp_dir do
+      Dir.mkdir('main_repo')
+      git = Dir.chdir('main_repo') do
+        Git.init('.', initial_branch: 'master').tap do |g|
+          File.write('file.txt', 'hello world')
+          g.add('file.txt')
+          g.commit('Initial commit')
+        end
+      end
+
+      git.worktree('worktree1').add
+      git.worktree('worktree2').add
+      git.worktree('worktree2').remove
+
+      branches = assert_nothing_raised { git.lib.branches_all }
+
+      master_branch = branches.find { |b| b.name == 'master' }
+      assert_equal(true, master_branch.current?)
+      assert_equal(true, master_branch.checked_out?)
+
+      worktree1_branch = branches.find { |b| b.name == 'worktree1' }
+      assert_equal(false, worktree1_branch.current?)
+      assert_equal(true, worktree1_branch.checked_out?)
+
+      worktree2_branch = branches.find { |b| b.name == 'worktree2' }
+      assert_equal(false, worktree2_branch.current?)
+      assert_equal(false, worktree2_branch.checked_out?)
+    end
+  end
+
   def test_branches_local
     bs = @git.branches.local
     assert(bs.size > 4)
@@ -84,11 +122,11 @@ class TestBranch < Test::Unit::TestCase
     branch = @git.branches[:test_object]
     assert_equal('test_object', branch.name)
 
-    %w{working/master remotes/working/master}.each do |branch_name|
+    %w{refs/remotes/working/master}.each do |branch_name|
       branch = @git.branches[branch_name]
 
-      assert_equal('master', branch.name)
-      assert_equal('remotes/working/master', branch.full)
+      assert_equal('refs/remotes/working/master', branch.name)
+      assert_equal('refs/remotes/working/master', branch.full)
       assert_equal('working', branch.remote.name)
       assert_equal('+refs/heads/*:refs/remotes/working/*', branch.remote.fetch_opts)
       assert_equal('../working.git', branch.remote.url)
